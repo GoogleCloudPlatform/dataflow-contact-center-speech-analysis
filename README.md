@@ -96,7 +96,7 @@ pip install Cython
 * The Dataflow job will create the **BigQuery Table** you listed in the parameters.
 * Please wait as it might take a few minutes to complete.
 ``` shell
-python3 saflongrunjobdataflow.py --project=[YOUR_PROJECT_ID] --input_topic=projects/[YOUR_PROJECT_ID]/topics/[YOUR_TOPIC_NAME] --runner=DataflowRunner --temp_location=gs://[YOUR_DATAFLOW_STAGING_BUCKET]/tmp --output_bigquery=[DATASET NAME].[TABLE --requirements_file="requirements.txt"
+python3 saflongrunjobdataflow.py --project=[YOUR_PROJECT_ID] --input_topic=projects/[YOUR_PROJECT_ID]/topics/[YOUR_TOPIC_NAME] --runner=DataflowRunner --temp_location=gs://[YOUR_DATAFLOW_STAGING_BUCKET]/tmp --output_bigquery=[DATASET NAME].[TABLE] --requirements_file="requirements.txt"
 ```
 
 12. In the cloned repo, go to “sample-audio-files” to locate sample audio files to process by Speech Analysis Framework
