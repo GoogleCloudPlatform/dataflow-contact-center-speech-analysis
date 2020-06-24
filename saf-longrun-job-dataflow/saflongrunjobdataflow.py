@@ -17,6 +17,7 @@ import argparse
 import logging
 import json
 import time
+import dateparser
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
@@ -74,7 +75,7 @@ def stt_parse_response(stt_data):
         'fileid': stt_data[1],
         'filename': stt_data[2],
         'callid': stt_data[3],
-        'date': stt_data[4],
+        'date': str(dateparser.parse(stt_data[4])),
         'year': stt_data[5],
         'month': stt_data[6],
         'day': stt_data[7],
@@ -289,7 +290,7 @@ def run(argv=None, save_main_session=True):
         {
             "mode": "NULLABLE", 
             "name": "date", 
-            "type": "STRING"
+            "type": "TIMESTAMP"
         }, 
         {
             "mode": "NULLABLE", 
