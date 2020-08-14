@@ -18,11 +18,14 @@ import logging
 import json
 import time
 import dateparser
-
 import apache_beam as beam
+import google.cloud.dlp
+
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.options.pipeline_options import SetupOptions
 from apache_beam.options.pipeline_options import StandardOptions
+from apache_beam.options.pipeline_options import GoogleCloudOptions
+from google.cloud.dlp import DlpServiceClient
 
 # function to get STT data from long audio file using asynchronous speech recognition
 def stt_output_response(data):
@@ -51,6 +54,7 @@ def stt_output_response(data):
     # return response to include STT data and agent search word
     response_list = [response,
                      pub_sub_data['fileid'],
+                     pub_sub_data['dlp'],
                      pub_sub_data['filename'],
                      pub_sub_data['callid'],
                      pub_sub_data['date'],
@@ -73,13 +77,14 @@ def stt_parse_response(stt_data):
 
     parse_stt_output_response = {
         'fileid': stt_data[1],
-        'filename': stt_data[2],
-        'callid': stt_data[3],
-        'date': str(dateparser.parse(stt_data[4])),
-        'year': stt_data[5],
-        'month': stt_data[6],
-        'day': stt_data[7],
-        'starttime': stt_data[8],
+        'dlp': stt_data[2],
+        'filename': stt_data[3],
+        'callid': stt_data[4],
+        'date': str(dateparser.parse(stt_data[5])),
+        'year': stt_data[6],
+        'month': stt_data[7],
+        'day': stt_data[8],
+        'starttime': stt_data[9],
         'duration': None,
         'speakeronespeaking': None,
         'speakertwospeaking': None,
@@ -108,19 +113,19 @@ def stt_parse_response(stt_data):
     parse_stt_output_response['transcript'] = string_transcript[:-1]  # remove the ending whitespace
 
     # check if the audio file is stereo
-    if stt_data[10] == 'true':
+    if stt_data[11] == 'true':
         logging.info('Audio file is stereo')
         speaker_one_tag = 1
         speaker_two_tag = 2
 
     # check if the audio file is mono
-    if stt_data[10] == 'false':
+    if stt_data[11] == 'false':
         logging.info('Audio file is mono')
         speaker_one_tag = 1
         speaker_two_tag = 2
 
     # check if the audio file is stereo
-    if stt_data[10] == 'true':
+    if stt_data[11] == 'true':
         # get words from stt_data and enrich data
         for element in stt_data[0]['response']['results']:     
             for word in element['alternatives'][0]['words']:
@@ -146,7 +151,7 @@ def stt_parse_response(stt_data):
             float(stt_data[0]['response']['results'][-1]['alternatives'][0]['words'][-1]['endTime'].strip('s')) * 100)
 
     # check if the audio file is mono
-    if stt_data[10] == 'false':
+    if stt_data[11] == 'false':
         # get words from stt_data and enrich data
         for element in stt_data[0]['response']['results'][-1]['alternatives'][0]['words']:
             total_speaking_time += float(element['endTime'].strip('s')) - float(element['startTime'].strip('s'))
@@ -222,8 +227,78 @@ def get_nlp_output(parse_stt_output):
             'sentiment': element['sentiment']['score']
         })
     # [END NLP analyzeEntitySentiment]
-
     return get_nlp_output_response
+
+# function to redact sensitive data if dlp key value set to true
+def redact_text(data, project):
+    info_types = []
+    deidentify_config = {
+        "info_type_transformations": {
+            "transformations": [
+                {
+                    "primitive_transformation": {
+                        "replace_config": {
+                            "new_value": {
+                                "string_value": '#',
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+
+    if data['dlp'] == 'true' or data['dlp'] == 'True':
+        dlp = google.cloud.dlp_v2.DlpServiceClient()
+        parent = dlp.project_path(project)
+        response = dlp.list_info_types('en-US')
+
+        # This will use all info types available, you can narrow it to a list or template
+        for info_type in response.info_types:
+            info_types.append({'name': info_type.name})
+
+        inspect_config = { "info_types": info_types}
+        
+        item = {"value": data['transcript']}
+        response = dlp.deidentify_content(
+            parent,
+            inspect_config=inspect_config,
+            deidentify_config=deidentify_config,
+            item=item,
+        )
+        data['transcript'] = response.item.value
+
+        for words_element in data['words']:
+            item = {"value": words_element['word']}
+            response = dlp.deidentify_content(
+                parent,
+                inspect_config=inspect_config,
+                deidentify_config=deidentify_config,
+                item=item,
+            )
+            words_element['word'] = response.item.value
+        
+        for entities_element in data['entities']:
+            item = {"value": entities_element['name']}
+            response = dlp.deidentify_content(
+                parent,
+                inspect_config=inspect_config,
+                deidentify_config=deidentify_config,
+                item=item,
+            )
+            entities_element['name'] = response.item.value
+
+        for sentences_element in data['sentences']:
+            item = {"value": sentences_element['sentence']}
+            response = dlp.deidentify_content(
+                parent,
+                inspect_config=inspect_config,
+                deidentify_config=deidentify_config,
+                item=item,
+            )
+            sentences_element['sentence'] = response.item.value
+
+    return data
 
 def run(argv=None, save_main_session=True):
     """Build and run the pipeline."""
@@ -243,6 +318,8 @@ def run(argv=None, save_main_session=True):
     known_args, pipeline_args = parser.parse_known_args(argv)
 
     pipeline_options = PipelineOptions(pipeline_args)
+    project_id = pipeline_options.view_as(GoogleCloudOptions).project
+
     pipeline_options.view_as(SetupOptions).save_main_session = save_main_session
     pipeline_options.view_as(StandardOptions).streaming = True
     p = beam.Pipeline(options=pipeline_options)
@@ -266,8 +343,11 @@ def run(argv=None, save_main_session=True):
     # Parse and enrich stt_output response
     parse_stt_output = stt_output | 'ParseSpeechToText' >> beam.Map(stt_parse_response)
 
-    # Get NLP Sentiment and Entity response
-    nlp_output = parse_stt_output | 'NaturalLanguageOutput' >> beam.Map(get_nlp_output)
+    # Get NLP sentiment and entity response
+    stt_nlp_output = parse_stt_output | 'NaturalLanguageOutput' >> beam.Map(get_nlp_output)
+
+    # Google Cloud DLP redaction for all info types
+    dlp_output = stt_nlp_output | 'RedactTextOptional' >> beam.Map(lambda j: redact_text(j, project_id))
 
     # Write to BigQuery
     bigquery_table_schema = {
@@ -280,6 +360,11 @@ def run(argv=None, save_main_session=True):
         {
             "mode": "NULLABLE", 
             "name": "filename", 
+            "type": "STRING"
+        }, 
+        {
+            "mode": "NULLABLE", 
+            "name": "dlp", 
             "type": "STRING"
         }, 
         {
@@ -435,7 +520,7 @@ def run(argv=None, save_main_session=True):
             }
         ]
     }
-    nlp_output | 'WriteToBigQuery' >> beam.io.WriteToBigQuery(
+    dlp_output | 'WriteToBigQuery' >> beam.io.WriteToBigQuery(
             known_args.output_bigquery,
             schema=bigquery_table_schema,
             create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,

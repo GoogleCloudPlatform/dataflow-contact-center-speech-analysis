@@ -6,6 +6,7 @@ It can and:
 * Process uploaded audio files to Cloud Storage.
 * Enrich the processed audio files with Cloud Speech-to-Text and Cloud Natural Language APIs.
 * Write the enriched data to BigQuery.
+* Redact sensitive information with Cloud Data Loss Prevention.
 
 You can:
 * Gain insights into quality metrics to track such as call silence, call duration, agent speaking time, user speaking time, and sentence heat maps.
@@ -23,7 +24,7 @@ The process follows:
 2. The Cloud Function is triggered on object.create
 3. The Cloud Function sends a long running job request to Cloud Speech-to-Text
 4. The Cloud Function then sends the job ID from Cloud Speech-to-Text with additional metadata to Cloud Pub/Sub
-5. The Cloud Dataflow job enriches the data and writes to BigQuery
+5. The Cloud Dataflow job enriches the data, optionally redacts sensitive information and writes to BigQuery
 
 To Learn More visit [Visualize speech data with Speech Analysis Framework](hhttps://cloud.google.com/solutions/visualize-speech-data-with-framework)
 
@@ -70,28 +71,34 @@ gcloud services enable speech
 gcloud services enable language.googleapis.com
 ```
 
-10. Deploy the Google Cloud Function
+10. Enable DLP __Optional__
+``` shell
+gcloud services enable dlp.googleapis.com
+```
+
+11. Deploy the Google Cloud Function
 * In the cloned repo, go to the “saf-longrun-job-func” directory and deploy the following Cloud Function.
 ``` shell
 gcloud functions deploy safLongRunJobFunc --region=us-central1 --stage-bucket=[YOUR_UPLOADED_AUDIO_FILES_BUCKET_NAME] --runtime=nodejs8 --trigger-event=google.storage.object.finalize --trigger-resource=[YOUR_UPLOADED_AUDIO_FILES_BUCKET_NAME]
 ```
 
-11. Deploy the Cloud Dataflow Pipeline
+12. Deploy the Cloud Dataflow Pipeline
+* python3 --version Python 3.7.8
 * In the cloned repo, go to “saf-longrun-job-dataflow” directory and deploy the Cloud Dataflow Pipeline. Run the commands below to deploy the dataflow job.
 ``` shell
 # Apple/Linux
-python -m venv env
+python3 -m venv env
 source env/bin/activate
-pip install apache-beam[gcp]
-pip install Cython
+pip3 install apache-beam[gcp]
+pip3 install dateparser
 ```
 or
 ``` shell
 # Windows
-python -m venv env
+python3 -m venv env
 env\Scripts\activate
-pip install apache-beam[gcp]
-pip install Cython
+pip3 install apache-beam[gcp]
+pip3 install dateparser
 ```
 * The Dataflow job will create the **BigQuery Table** you listed in the parameters.
 * Please wait as it might take a few minutes to complete.
@@ -99,20 +106,21 @@ pip install Cython
 python3 saflongrunjobdataflow.py --project=[YOUR_PROJECT_ID] --input_topic=projects/[YOUR_PROJECT_ID]/topics/[YOUR_TOPIC_NAME] --runner=DataflowRunner --temp_location=gs://[YOUR_DATAFLOW_STAGING_BUCKET]/tmp --output_bigquery=[DATASET NAME].[TABLE] --requirements_file="requirements.txt"
 ```
 
-12. In the cloned repo, go to “sample-audio-files” to locate sample audio files to process by Speech Analysis Framework
+13. In the cloned repo, go to “sample-audio-files” to locate sample audio files to process by Speech Analysis Framework
 * For the [TOPIC_NAME], do not include the full path, just the name of the TOPIC
+* Choose true or false to run DLP. DLP will use all info types to scan the data.
 
 ``` shell
 # stereo wav audio sample
-gsutil -h x-goog-meta-callid:1234567 -h x-goog-meta-stereo:true -h x-goog-meta-pubsubtopicname:[TOPIC_NAME] -h x-goog-meta-year:2019 -h x-goog-meta-month:11 -h x-goog-meta-day:06 -h x-goog-meta-starttime:1116 cp [YOUR_FILE_NAME.wav] gs://[YOUR_UPLOADED_AUDIO_FILES_BUCKET_NAME]
+gsutil -h x-goog-meta-dlp:[true or false] -h x-goog-meta-callid:1234567 -h x-goog-meta-stereo:true -h x-goog-meta-pubsubtopicname:[TOPIC_NAME] -h x-goog-meta-year:2019 -h x-goog-meta-month:11 -h x-goog-meta-day:06 -h x-goog-meta-starttime:1116 cp [YOUR_FILE_NAME.wav] gs://[YOUR_UPLOADED_AUDIO_FILES_BUCKET_NAME]
 ```
 
 ``` shell
 # mono flac audio sample
-gsutil -h x-goog-meta-callid:1234567 -h x-goog-meta-stereo:false -h x-goog-meta-pubsubtopicname:[TOPIC_NAME] -h x-goog-meta-year:2019 -h x-goog-meta-month:11 -h x-goog-meta-day:06 -h x-goog-meta-starttime:1116 cp [YOUR_FILE_NAME.flac] gs://[YOUR_UPLOADED_AUDIO_FILES_BUCKET_NAME]
+gsutil -h x-goog-meta-dlp:[true or false] -h x-goog-meta-callid:1234567 -h x-goog-meta-stereo:false -h x-goog-meta-pubsubtopicname:[TOPIC_NAME] -h x-goog-meta-year:2019 -h x-goog-meta-month:11 -h x-goog-meta-day:06 -h x-goog-meta-starttime:1116 cp [YOUR_FILE_NAME.flac] gs://[YOUR_UPLOADED_AUDIO_FILES_BUCKET_NAME]
 ```
 
-13. After a few minutes you will be able to see the data in BigQuery.
+14. After a few minutes you will be able to see the data in BigQuery.
 * Sample select statements that can be executed in the BigQuery console.
 ``` sql
 -- Order Natural Language Entities for all records
