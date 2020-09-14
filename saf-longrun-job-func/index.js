@@ -132,6 +132,7 @@ exports.safLongRunJobFunc = (event, context, callback) => {
 				'starttime': file.metadata.starttime === undefined ? 'undefined' : file.metadata.starttime,
 				'duration': duration, //get value from fluent-ffmpeg
 				'stereo': file.metadata.stereo === undefined ? 'undefined' : file.metadata.stereo,
+				'dlp': file.metadata.dlp === undefined ? 'undefined' : file.metadata.dlp
 			};
 
 			client
