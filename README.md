@@ -28,6 +28,12 @@ The process follows:
 
 To Learn More visit [Visualize speech data with Speech Analysis Framework](hhttps://cloud.google.com/solutions/visualize-speech-data-with-framework)
 
+
+## If you want to do more audio redaction, check out the [Speech Redaction Framework](https://github.com/GoogleCloudPlatform/dataflow-speech-redaction)
+![Speech Redaction Framework](images/srf-diagram-1.png "Speech Redaction Framework")
+
+
+
 ## How to install the Speech Analysis Framework
 
 1. [Install the Google Cloud SDK](https://cloud.google.com/sdk/install)
