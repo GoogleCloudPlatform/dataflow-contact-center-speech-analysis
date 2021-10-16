@@ -27,13 +27,6 @@ resource "random_id" "bucket_id" {
   byte_length = 8
 }
 
-# Download Speech Analysis Framework (SAF) source files
-resource "null_resource" "git_copy" {
-  provisioner "local-exec" {
-    command = "git clone https://github.com/GoogleCloudPlatform/dataflow-contact-center-speech-analysis.git"
-  }
-}
-
 #Create a storage bucket for Dataflow Staging Files
 resource "google_storage_bucket" "dataflow_staging_bucket" {
   name = "${var.dataflow_staging_bucket}-${random_id.bucket_id.hex}"
@@ -147,11 +140,8 @@ resource "google_dataflow_flex_template_job" "big_data_job" {
 # Deploy the Google Cloud Function
 data "archive_file" "function_files" {
   type        = "zip"
-  source_dir  = "./dataflow-contact-center-speech-analysis/saf-longrun-job-func"
+  source_dir  = "../../dataflow-contact-center-speech-analysis/saf-longrun-job-func"
   output_path = "./function_zipfile/index.zip"
-  depends_on = [
-    null_resource.git_copy
-  ]
 }
 
 resource "google_storage_bucket_object" "archive" {
