@@ -134,7 +134,8 @@ resource "google_dataflow_flex_template_job" "big_data_job" {
   }
   depends_on = [
     google_storage_bucket_object.template,
-    module.project-services
+    module.project-services,
+    module.gcloud
   ]
 }
 
