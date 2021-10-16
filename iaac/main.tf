@@ -68,6 +68,7 @@ module "project-services" {
   disable_services_on_destroy = true
 
   activate_apis = [
+    "cloudbuild.googleapis.com",
     "dlp.googleapis.com",
     "dataflow.googleapis.com",
     "language.googleapis.com",
