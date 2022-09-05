@@ -35,16 +35,19 @@ resource "google_storage_bucket" "dataflow_staging_bucket" {
 # Create a storage bucket for Uploaded Audio Files
 resource "google_storage_bucket" "audio_uploads_bucket" {
   name = "${var.audio_uploads_bucket}-${random_id.bucket_id.hex}"
+  location = "${var.dataflow_region}"
 }
 
 # Create a storage bucket for Dataflow Flex template
 resource "google_storage_bucket" "flextemplate_bucket" {
   name = "${var.flextemplate_bucket}-${random_id.bucket_id.hex}"
+  location = "${var.dataflow_region}"
 }
 
 # Create a storage bucket for Cloud Function Source files
 resource "google_storage_bucket" "function_bucket" {
   name = "${var.function_bucket}-${random_id.bucket_id.hex}"
+  location = "${var.dataflow_region}"
 }
 
 # Create a BigQuery Dataset
